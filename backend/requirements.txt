@@ -1,0 +1,15 @@
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+python-dotenv
+sse-starlette
+langchain-core
+langchain-groq
+langchain-huggingface
+langchain-chroma
+langchain-community
+langchain-text-splitters
+langgraph
+chromadb
+sentence-transformers
