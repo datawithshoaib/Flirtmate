@@ -12,3 +12,4 @@ __pycache__/
 .npm-cache/
 backend/chroma_db/
 flirtmate-technical-documentation.md
+.openchamber/

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
 import { streamChat } from "@/lib/api";
 
 type Message = { role: "user" | "assistant"; content: string };
@@ -11,6 +11,12 @@ const personas = [
   { id: "sweet", name: "Shy-Sweet", note: "Gentle, wholesome, and a little bashful." },
 ];
 const spiceNames = ["Friendly", "Playful", "Flirty"];
+const starterPrompts = [
+  "Tell me a clever pickup line",
+  "What's your idea of a perfect date?",
+  "Give me a fun fact to start with",
+  "Share a playful icebreaker",
+];
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -22,8 +28,9 @@ export default function Home() {
   const [checkingAge, setCheckingAge] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     setSessionId(crypto.randomUUID());
@@ -34,12 +41,21 @@ export default function Home() {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  async function send(event?: FormEvent) {
-    event?.preventDefault();
-    const message = draft.trim();
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+    }
+  }, [draft]);
+
+  async function sendMessage(messageText: string) {
+    const message = messageText.trim();
     if (!message || busy || !sessionId) return;
     setError("");
     setDraft("");
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
     setBusy(true);
     setMessages((current) => [...current, { role: "user", content: message }, { role: "assistant", content: "" }]);
     try {
@@ -56,7 +72,19 @@ export default function Home() {
       setMessages((current) => current.at(-1)?.content === "" ? current.slice(0, -1) : current);
     } finally {
       setBusy(false);
-      inputRef.current?.focus();
+      textareaRef.current?.focus();
+    }
+  }
+
+  async function send(event?: FormEvent) {
+    event?.preventDefault();
+    sendMessage(draft);
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      sendMessage(draft);
     }
   }
 
@@ -75,17 +103,46 @@ export default function Home() {
     setAgeConfirmed(true);
   }
 
+  function handleStarter(prompt: string) {
+    sendMessage(prompt);
+  }
+
   const selectedPersona = personas.find((item) => item.id === persona)!;
 
   return (
     <div className="app-shell">
       <header className="topbar">
         <div className="brand"><span className="brand-mark">♡</span> flirtmate</div>
-        <div className="top-actions"><span className="age-pill">18+ ONLY</span><button className="new-chat" onClick={newChat}>＋ New chat</button></div>
+        <div className="top-actions">
+          <button className="menu-toggle" onClick={() => setSidebarOpen(true)} aria-label="Open settings">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="3" y1="12" x2="21" y2="12"></line>
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+          </button>
+          <span className="age-pill">18+ ONLY</span>
+          <button className="new-chat" onClick={newChat}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: "4px" }}>
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            New chat
+          </button>
+        </div>
       </header>
       <main className="main">
-        <aside className="sidebar">
-          <p className="side-kicker">Make it your vibe</p>
+        {sidebarOpen && <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
+        <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
+          <div className="sidebar-header">
+            <p className="side-kicker">Make it your vibe</p>
+            <button className="close-sidebar" onClick={() => setSidebarOpen(false)} aria-label="Close settings">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
           <div className="control-group">
             <label className="control-label" htmlFor="persona">Choose a persona</label>
             <div className="select-wrap"><select id="persona" className="persona-select" value={persona} onChange={(event) => setPersona(event.target.value)}>
@@ -103,21 +160,61 @@ export default function Home() {
         <section className="chat-card" aria-label="Chat with Flirtmate">
           <div className="chat-head"><div className="avatar">✦</div><div><div className="chat-title">Flirtmate</div><div className="online">Here for a good conversation</div></div></div>
           <div className="chat-body" aria-live="polite">
-            {messages.length === 0 ? <div className="welcome"><div className="welcome-icon">💌</div><h1>A little charm goes a long way.</h1><p>Say hello, share a story, or ask for a clever opener. I’ll match your vibe.</p></div> : messages.map((message, index) => (
-              <div className={`message-row ${message.role}`} key={index}>
-                <div className="mini-avatar">{message.role === "user" ? "☺" : "✦"}</div>
-                <div className={`bubble ${busy && index === messages.length - 1 ? "typing" : ""}`}>{message.content}</div>
+            {messages.length === 0 ? (
+              <div className="welcome">
+                <div className="welcome-icon">💌</div>
+                <h1>A little charm goes a long way.</h1>
+                <p>Say hello, share a story, or ask for a clever opener. I’ll match your vibe.</p>
+                <div className="starter-grid">
+                  {starterPrompts.map((prompt) => (
+                    <button key={prompt} className="starter-chip" onClick={() => handleStarter(prompt)} disabled={busy}>
+                      {prompt}
+                    </button>
+                  ))}
+                </div>
               </div>
-            ))}
+            ) : (
+              messages.map((message, index) => (
+                <div className={`message-row ${message.role} fade-in`} key={index}>
+                  <div className="mini-avatar">{message.role === "user" ? "☺" : "✦"}</div>
+                  <div className={`bubble ${busy && index === messages.length - 1 && message.content === "" ? "typing" : ""}`}>
+                    {busy && index === messages.length - 1 && message.content === "" ? (
+                      <span className="typing-dots">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                      </span>
+                    ) : (
+                      message.content
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
             <div ref={endRef} />
           </div>
           <div className="chat-footer">
             {error && <div className="error" role="alert">{error}</div>}
             <form className="compose" onSubmit={send}>
-              <input ref={inputRef} value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={1000} placeholder="Say something charming…" aria-label="Your message" disabled={busy} />
-              <button className="send" type="submit" aria-label="Send message" disabled={busy || !draft.trim()}>➤</button>
+              <textarea
+                ref={textareaRef}
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={handleKeyDown}
+                maxLength={1000}
+                placeholder="Say something charming…"
+                aria-label="Your message"
+                disabled={busy}
+                rows={1}
+              />
+              <button className="send" type="submit" aria-label="Send message" disabled={busy || !draft.trim()}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="22" y1="2" x2="11" y2="13"></line>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+              </button>
             </form>
-            <p className="disclaimer">AI-generated replies · Keep it kind, keep it comfortable</p>
+            <p className="disclaimer">AI-generated replies · Shift+Enter for new line · Keep it kind, keep it comfortable</p>
           </div>
         </section>
       </main>
